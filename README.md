@@ -14,4 +14,5 @@ Simple e-commerce application micro services using Golang
 This project ships with a `Makefile` which includes operations to build and test application locally using a series of docker containers.
 
 To run these steps:
+- Run `cd docker`
 - Run `make up_build`
