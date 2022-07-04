@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+
+  mongo:
+    image: 'mongo:4.2.16-bionic'
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: stock
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - ./db-data/mongo/:/data/db
+
+  stock-service:
+    build:
+      context: ../stock-service
+      dockerfile: ../stock-service/stock-service.dockerfile
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      MONGO_USERNAME: admin
+      MONGO_PASSWORD: password
+    deploy:
+      mode: replicated
+      replicas: 1
