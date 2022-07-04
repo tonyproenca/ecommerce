@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"time"
@@ -42,9 +43,12 @@ type StockProduct struct {
 //}
 
 func (m *MongoDBRepository) Insert(stockProduct StockProduct) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	collection := client.Database("stock").Collection("stock")
 
-	_, err := collection.InsertOne(context.TODO(), StockProduct{
+	_, err := collection.InsertOne(ctx, StockProduct{
 		ProductCode: stockProduct.ProductCode,
 		ProductName: stockProduct.ProductName,
 		Quantity:    stockProduct.Quantity,
@@ -88,9 +92,11 @@ func (m *MongoDBRepository) Update(stockProduct StockProduct) error {
 		return err
 	}
 
+	idPrimitive, err := primitive.ObjectIDFromHex(entry.ID)
+
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": entry.ID},
+		bson.M{"_id": idPrimitive},
 		bson.D{
 			{"$set", bson.D{
 				{"product_name", stockProduct.ProductName},
@@ -120,9 +126,11 @@ func (m *MongoDBRepository) Delete(productCode string) error {
 		return err
 	}
 
+	idPrimitive, err := primitive.ObjectIDFromHex(entry.ID)
+
 	_, err = collection.DeleteOne(
 		ctx,
-		bson.M{"_id": entry.ID},
+		bson.M{"_id": idPrimitive},
 	)
 
 	if err != nil {

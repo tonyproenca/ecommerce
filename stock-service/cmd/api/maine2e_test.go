@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/tonyproenca/stock-service/cmd/data"
@@ -83,9 +84,10 @@ func TestMain(m *testing.M) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	})
-	result := collection.FindOne(context.TODO(), "62c210b26d113efcbb322074")
-	log.Println("Seed result:", result)
-	testApp.Repo = data.NewMongoDBRepository(db)
+
+	testApp = Config{
+		Repo: data.NewMongoDBRepository(db),
+	}
 
 	if err != nil {
 		log.Fatalf("Could not seed the data %s", err)
@@ -111,8 +113,27 @@ func TestMain(m *testing.M) {
 func TestPostStockProductE2E(t *testing.T) {
 	postBody := map[string]interface{}{
 		"ProductName": "test",
+		"ProductCode": "1",
+		"Quantity":    1,
+	}
+
+	body, _ := json.Marshal(postBody)
+	req, _ := http.NewRequest("POST", "/stock-product", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(testApp.StoreNewStockProduct)
+
+	handler.ServeHTTP(rr, req)
+	result := rr.Body.String()
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.Contains(t, result, "Product Stock data successfully stored")
+}
+
+func TestPostStockProductE2EAlreadyExistingProductCode(t *testing.T) {
+	postBody := map[string]interface{}{
+		"ProductName": "test",
 		"ProductCode": "123",
-		"Quantity":    "1",
+		"Quantity":    1,
 	}
 
 	body, _ := json.Marshal(postBody)
@@ -122,14 +143,108 @@ func TestPostStockProductE2E(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.Equal(t, http.StatusConflict, rr.Code)
 }
 
 func TestGetStockProductE2E(t *testing.T) {
-	productCode := "123"
-	req, _ := http.NewRequest("GET", "/stock-product/"+productCode, nil)
+	req, _ := http.NewRequest("GET", "/stock-product/{productCode}", nil)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("productCode", "123")
+
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(testApp.RetrieveStockProduct)
+
+	handler.ServeHTTP(rr, req)
+	result := rr.Body.String()
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, result, `"productCode":"123"`)
+	assert.Contains(t, result, `"productName":"test"`)
+	assert.Contains(t, result, `"quantity":1`)
+}
+
+func TestGetStockProductE2ENotFound(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/stock-product/{productCode}", nil)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("productCode", "999")
+
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(testApp.RetrieveStockProduct)
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestPutStockProductE2E(t *testing.T) {
+	postBody := map[string]interface{}{
+		"productName": "test",
+		"productCode": "123",
+		"quantity":    123,
+	}
+
+	body, _ := json.Marshal(postBody)
+	req, _ := http.NewRequest("PUT", "/stock-product", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(testApp.UpdateStockProduct)
+
+	handler.ServeHTTP(rr, req)
+	result := rr.Body.String()
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, result, "Product Stock data successfully stored")
+	assert.Contains(t, result, `"productCode":"123"`)
+	assert.Contains(t, result, `"productName":"test"`)
+	assert.Contains(t, result, `"quantity":123`)
+}
+
+func TestPutStockProductE2ENotFound(t *testing.T) {
+	postBody := map[string]interface{}{
+		"ProductName": "test",
+		"ProductCode": "999",
+		"Quantity":    "1",
+	}
+
+	body, _ := json.Marshal(postBody)
+	req, _ := http.NewRequest("PUT", "/stock-product", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(testApp.UpdateStockProduct)
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestDeleteStockProductE2E(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/stock-product/{productCode}", nil)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("productCode", "123")
+
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(testApp.DeleteStockProduct)
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestDeleteStockProductE2ENonExistingDocument(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/stock-product/{productCode}", nil)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("productCode", "999")
+
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(testApp.DeleteStockProduct)
 
 	handler.ServeHTTP(rr, req)
 
