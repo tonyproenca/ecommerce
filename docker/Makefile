@@ -17,7 +17,7 @@ up_build: build_stock
 ## build_broker: builds the broker binary as a linux executable
 build_stock:
 	@echo "Building stock binary..."
-	cd ../stock-service && env GOOS=linux CGO_ENABLED=0 go build -o ${STOCK_BINARY} ./cmd/api
+	cd ../stock-service && env GOOS=linux CGO_ENABLED=0 go build -o ${STOCK_BINARY} ./cmd
 	@echo "Done!"
 
 ## down: stop docker compose
